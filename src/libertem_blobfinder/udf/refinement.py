@@ -4,7 +4,7 @@ from libertem.utils import frame_peaks
 import libertem.analysis.gridmatching as grm
 
 from libertem_blobfinder.common.patterns import MatchPattern
-from libertem_blobfinder.udf.correlation import FastCorrelationUDF,\
+from libertem_blobfinder.udf.correlation import CorrelationUDF, FastCorrelationUDF,\
     SparseCorrelationUDF, FullFrameCorrelationUDF
 
 
@@ -150,7 +150,7 @@ class AffineMixin(RefinementMixin):
 def run_refine(
         ctx, dataset, zero, a, b, match_pattern: MatchPattern, matcher: grm.Matcher,
         correlation='fast', match='fast', indices=None, steps=5, zero_shift=None, roi=None,
-        progress=False):
+        progress=False, as_udf=False):
     '''
     Wrapper function to refine the given lattice for each frame by calculating
     approximate peak positions and refining them for each frame using a
@@ -242,7 +242,9 @@ def run_refine(
     )
     peaks = peaks.astype('int')
 
-    if correlation == 'fast':
+    if issubclass(correlation, CorrelationUDF):
+        method = correlation
+    elif correlation == 'fast':
         method = FastCorrelationUDF
     elif correlation == 'sparse':
         method = SparseCorrelationUDF
@@ -278,6 +280,9 @@ def run_refine(
         steps=steps,
         zero_shift=zero_shift,
     )
+
+    if as_udf:
+        return udf, indices
 
     result = ctx.run_udf(
         dataset=dataset,
