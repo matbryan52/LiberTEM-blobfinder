@@ -179,9 +179,10 @@ def run_refine(
         Instance of :class:`~MatchPattern`
     matcher : libertem.analysis.gridmatching.Matcher
         Instance of :class:`~libertem.analysis.gridmatching.Matcher` to perform the matching
-    correlation : {'fast', 'sparse', 'fullframe'}, optional
+    correlation : {'fast', 'sparse', 'fullframe', :code:`CorrelationUDF`}, optional
         'fast', 'sparse' or 'fullframe' to select :class:`~FastCorrelationUDF`,
         :class:`~SparseCorrelationUDF` or :class:`~FullFrameCorrelationUDF`
+        Pass a subclass of :class:`~CorrelationUDF` to provide a custom UDF
     match : {'fast', 'affine'}, optional
         'fast' or 'affine' to select
         :class:`~FastmatchMixin` or :class:`~AffineMixin`
@@ -204,6 +205,8 @@ def run_refine(
         ROI for :meth:`~libertem.api.Context.run_udf`
     progress : bool, optional
         Show progress bar. Default :code:`False`
+    as_udf : bool, optional
+        Return the UDF rather than running it. Default :code:`False`
 
     Returns
     -------
