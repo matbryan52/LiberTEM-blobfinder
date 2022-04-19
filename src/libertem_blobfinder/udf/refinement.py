@@ -150,7 +150,7 @@ class AffineMixin(RefinementMixin):
 def run_refine(
         ctx, dataset, zero, a, b, match_pattern: MatchPattern, matcher: grm.Matcher,
         correlation='fast', match='fast', indices=None, steps=5, zero_shift=None, roi=None,
-        progress=False, as_udf=False):
+        progress=False, as_udf=False, **udf_kwargs):
     '''
     Wrapper function to refine the given lattice for each frame by calculating
     approximate peak positions and refining them for each frame using a
@@ -245,7 +245,7 @@ def run_refine(
     )
     peaks = peaks.astype('int')
 
-    if issubclass(correlation, CorrelationUDF):
+    if isinstance(correlation, type) and issubclass(correlation, CorrelationUDF):
         method = correlation
     elif correlation == 'fast':
         method = FastCorrelationUDF
@@ -282,6 +282,7 @@ def run_refine(
         matcher=matcher,
         steps=steps,
         zero_shift=zero_shift,
+        **udf_kwargs,
     )
 
     if as_udf:
