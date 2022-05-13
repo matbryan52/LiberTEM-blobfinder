@@ -295,3 +295,52 @@ def run_refine(
         progress=progress
     )
     return (result, indices)
+
+
+def run_refine_peaks(
+        ctx, dataset, peaks, match_pattern: MatchPattern, matcher: grm.Matcher,
+        correlation='fast', steps=5, zero_shift=None, as_udf=False, progress=False, **kwargs):
+
+        zero = np.asarray((0, 0))
+        a = np.asarray((1, 0))
+        b = np.asarray((0, 1))
+        peaks = np.asarray(peaks).reshape(-1, 2)
+        indices = peaks.copy() # indices are virtual equivalent to pixel coordinates (y, x)
+
+        if correlation == 'fast':
+            method = FastCorrelationUDF
+        elif correlation == 'sparse':
+            method = SparseCorrelationUDF
+        elif correlation == 'fullframe':
+            method = FullFrameCorrelationUDF
+        else:
+            raise ValueError(
+                "Unknown correlation method %s. Supported are 'fast' and 'sparse'" % correlation
+            )
+
+        # The inheritance order matters: FIRST the mixin, which calls
+        # the super class methods.
+        class MyUDF(AffineMixin, method):
+            pass
+
+        udf = MyUDF(
+            peaks=peaks,
+            indices=indices,
+            start_zero=zero,
+            start_a=a,
+            start_b=b,
+            match_pattern=match_pattern,
+            matcher=matcher,
+            steps=steps,
+            zero_shift=zero_shift,
+        )
+
+        if as_udf:
+            return udf, indices
+
+        result = ctx.run_udf(
+            dataset=dataset,
+            udf=udf,
+            progress=progress
+        )
+        return (result, indices)
