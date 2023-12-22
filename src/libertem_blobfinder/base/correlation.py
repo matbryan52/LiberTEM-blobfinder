@@ -578,7 +578,12 @@ def process_frame_full(template, crop_size, frame, peaks,
     log_scale(frame, out=frame_buf)
     spec_part = fft.rfft2(frame_buf)
     corrspec = template * spec_part
-    corr = fft.fftshift(fft.irfft2(corrspec))
+    corr = fft.ifftshift(
+        fft.irfft2(
+            corrspec, s=frame_buf.shape[-2:],
+        ),
+        axes=(-2, -1),
+    )
     crop_bufs = np.zeros((buf_count, *crop_shape), dtype=corr.dtype)
     block_count = (len(peaks) - 1) // buf_count + 1
     for block in range(block_count):
