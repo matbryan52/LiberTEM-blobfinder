@@ -267,6 +267,8 @@ def evaluate_upsampling(corrspecs, corrs, peaks, crop_shape, sig_shape, upsample
         fft.fftfreq(corr_shape[0], upsample_factor),
         fft.rfftfreq(corr_shape[1], upsample_factor),
     )
+    # avoids numba warning
+    crop_shape = tuple(crop_shape)
 
     for i in range(len(corrs)):
         corrspec = corrspecs[i] if corrspec_stack else corrspecs
