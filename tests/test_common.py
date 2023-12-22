@@ -4,6 +4,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 import pytest
 from scipy.signal import correlate
+from typing import Tuple
 
 import libertem.masks as m
 from libertem.utils.generate import cbed_frame
@@ -207,6 +208,12 @@ def test_standalone_full():
         assert np.allclose(refineds[0], peaks, atol=0.5)
 
 
+class MyUserTemplate(UserTemplate):
+    def get_crop_size(self) -> Tuple[int, int]:
+        standard = 2 * int(np.ceil(self.search))
+        return tuple(standard + ax % 2 for ax in self.template.shape)
+
+
 @pytest.mark.parametrize(
         'frame_pos', ((0, 0), (2, 3)),
 )
@@ -233,12 +240,11 @@ def test_scipy_correlate(frame_pos, peak, shape):
 
     pattern = np.zeros((3, 3), dtype=np.float32)
     pattern[1, 1] = 1
-    pattern = UserTemplate(pattern)
+    pattern = MyUserTemplate(pattern)
     centers, _, _, _ = process_frames_fast(
         pattern=pattern,
         frames=np.array([frame]),
         peaks=np.array([peak]),
         upsample=False,
-        crop_shape=(7, 7),
     )
     assert_allclose(ref_center, centers[0, 0])

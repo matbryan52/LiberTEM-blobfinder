@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Union
 
 import libertem.masks as masks
 
@@ -25,7 +25,7 @@ class MatchPattern:
         '''
         self.search = search
 
-    def get_crop_size(self):
+    def get_crop_size(self) -> Union[int, Tuple[int, int]]:
         return int(np.ceil(self.search))
 
     def get_mask(self, sig_shape):

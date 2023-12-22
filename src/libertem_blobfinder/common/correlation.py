@@ -128,8 +128,9 @@ def process_frames_fast(
     '''
 
     if crop_shape is None:
-        crop_size = pattern.get_crop_size()
-        crop_shape = (2 * crop_size, 2 * crop_size)
+        crop_shape = pattern.get_crop_size()
+        if isinstance(crop_shape, int):
+            crop_shape = (2 * crop_shape, 2 * crop_shape)
     template = pattern.get_template(sig_shape=crop_shape)
 
     centers = np.zeros((len(frames), len(peaks), 2), dtype=np.int16)
@@ -209,8 +210,9 @@ def process_frames_full(
     >>> assert np.allclose(refineds[0], peaks, atol=0.1)
     '''
     if crop_shape is None:
-        crop_size = pattern.get_crop_size()
-        crop_shape = (2 * crop_size, 2 * crop_size)
+        crop_shape = pattern.get_crop_size()
+        if isinstance(crop_shape, int):
+            crop_shape = (2 * crop_shape, 2 * crop_shape)
     template = pattern.get_template(sig_shape=frames[0].shape)
 
     centers = np.zeros((len(frames), len(peaks), 2), dtype=np.uint16)
