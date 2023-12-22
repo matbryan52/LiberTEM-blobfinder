@@ -419,7 +419,7 @@ def process_frame_fast(template, crop_size, frame, peaks,
     out_elevations : np.ndarray
         Output buffer for peak elevation in log scaled frame. Shape (n_peaks, ) and float dtype.
     crop_bufs : np.ndarray
-        Aligned buffer for pyfftw. Shape (n, *crop_shape) and float dtype.
+        Aligned buffer for pyfftw. Shape :code:`(n, *crop_shape)` and float dtype.
         n doesn't have to match the number of peaks. Instead, it should be chosen for good L3 cache
         efficiency. :meth:`allocate_crop_bufs` can be used to allocate this buffer.
     upsample : Union[bool, int], optional
