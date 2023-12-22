@@ -126,7 +126,9 @@ class FastCorrelationUDF(CorrelationUDF):
         n_peaks = len(self.get_peaks())
         mask = self.get_pattern()
         crop_size = mask.get_crop_size()
-        template = mask.get_template(sig_shape=(2 * crop_size, 2 * crop_size))
+        if isinstance(crop_size, int):
+            crop_size = (2 * crop_size, 2 * crop_size)
+        template = mask.get_template(sig_shape=crop_size)
         dtype = np.result_type(self.meta.input_dtype, np.float32)
         crop_bufs = ltbc.allocate_crop_bufs(crop_size, n_peaks, dtype=dtype, limit=self.limit)
         kwargs = {
