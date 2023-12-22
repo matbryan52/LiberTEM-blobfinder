@@ -48,13 +48,14 @@ def test_refinement():
 @pytest.mark.with_numba
 def test_crop_disks_from_frame():
     crop_size = 2
+    crop_shape = (2 * crop_size, 2 * crop_size)
     peaks = [
         [0, 0],
         [2, 2],
         [5, 5],
     ]
     frame = _mk_random(size=(6, 6), dtype="float32")
-    crop_buf = np.zeros((len(peaks), 2*crop_size, 2*crop_size))
+    crop_buf = np.zeros((len(peaks), *crop_shape))
     base.correlation.crop_disks_from_frame(
         peaks=np.array(peaks),
         frame=frame,

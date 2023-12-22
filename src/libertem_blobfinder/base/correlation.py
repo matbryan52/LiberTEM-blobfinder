@@ -240,18 +240,19 @@ def unravel_index(index, shape):
 @numba.njit
 def evaluate_correlations(corrs, peaks, crop_size,
         out_centers, out_refineds, out_heights, out_elevations):
+    # crop size is unused because it is implicit in the shape of corrs
     for i in range(len(corrs)):
         corr = corrs[i]
         center = unravel_index(np.argmax(corr), corr.shape)
         refined = np.array(refine_center(center, 2, corr), dtype=np.float32)
         height = np.float32(corr[center])
-        out_centers[i] = _shift(np.array(center), peaks[i], crop_size)
-        out_refineds[i] = _shift(refined, peaks[i], crop_size)
+        out_centers[i] = _shift(np.array(center), peaks[i], corr.shape)
+        out_refineds[i] = _shift(refined, peaks[i], corr.shape)
         out_heights[i] = height
         out_elevations[i] = np.float32(peak_elevation(refined, corr, height))
 
 
-def evaluate_upsampling(corrspecs, corrs, peaks, crop_size, sig_shape, upsample_factor,
+def evaluate_upsampling(corrspecs, corrs, peaks, crop_shape, sig_shape, upsample_factor,
         out_centers, out_refineds):
     # A corrspec stack means we are processing corrspecs of crops of the frame
     # and corrs are the irfft2 of each corrspec. Otherwise, corrspecs is the single rfft2
@@ -271,12 +272,12 @@ def evaluate_upsampling(corrspecs, corrs, peaks, crop_size, sig_shape, upsample_
         corrspec = corrspecs[i] if corrspec_stack else corrspecs
         center = out_centers[i]
         if corrspec_stack:
-            center = _unshift(center, peaks[i], crop_size)
+            center = _unshift(center, peaks[i], crop_shape)
         out_refineds[i] = refine_center_upsampling(
             corr_center, center, corrspec, frequencies, upsample_factor=upsample_factor
         )
         if corrspec_stack:
-            out_refineds[i] = _shift(out_refineds[i], peaks[i], crop_size)
+            out_refineds[i] = _shift(out_refineds[i], peaks[i], crop_shape)
 
 
 def log_scale(data, out):
@@ -290,12 +291,13 @@ def log_scale_cropbufs_inplace(crop_bufs):
 
 @numba.njit
 def crop_disks_from_frame(peaks, frame, crop_size, out_crop_bufs):
+    crop_shape = out_crop_bufs.shape[1:]
 
     def frame_coord_y(peak, y):
-        return y + peak[0] - crop_size
+        return y + peak[0] - crop_shape[0] // 2
 
     def frame_coord_x(peak, x):
-        return x + peak[1] - crop_size
+        return x + peak[1] - crop_shape[1] // 2
 
     fy, fx = frame.shape
     for i in range(len(peaks)):
@@ -313,13 +315,13 @@ def crop_disks_from_frame(peaks, frame, crop_size, out_crop_bufs):
 
 
 @numba.njit
-def _shift(relative_center, anchor, crop_size):
-    return relative_center + anchor - np.array((crop_size, crop_size))
+def _shift(relative_center, anchor, crop_shape):
+    return relative_center + anchor - (np.array(crop_shape) // 2)
 
 
 @numba.njit
-def _unshift(center, anchor, crop_size):
-    return center - anchor + np.array((crop_size, crop_size))
+def _unshift(center, anchor, crop_shape):
+    return center - anchor + (np.array(crop_shape) // 2)
 
 
 def get_buf_count(crop_size, n_peaks, dtype, limit=2**19):
@@ -329,8 +331,9 @@ def get_buf_count(crop_size, n_peaks, dtype, limit=2**19):
 
     Parameters
     ----------
-    crop_size : int
-        The cropped parts will have size (2 * crop-size, 2 * crop_size)
+    crop_size : Union[Tuple[int, int], int]
+        If Tuple, the cropped parts will have this shape, else
+        the crop will be (2 * crop_size, 2 * crop_size)
     n_peaks : int
         Number of peaks
     dtype : numpy.dtype
@@ -342,8 +345,10 @@ def get_buf_count(crop_size, n_peaks, dtype, limit=2**19):
     -------
     int
     '''
+    if isinstance(crop_size, int):
+        crop_size = (2 * crop_size, 2 * crop_size)
     dtype = np.dtype(dtype)
-    full_size = (2 * crop_size)**2 * dtype.itemsize
+    full_size = np.prod(crop_size, dtype=int) * dtype.itemsize
     return min(max(1, limit // full_size), n_peaks)
 
 
@@ -356,8 +361,9 @@ def allocate_crop_bufs(crop_size, n_peaks, dtype, limit=2**19):
 
     Parameters
     ----------
-    crop_size : int
-        The cropped parts will have size (2 * crop-size, 2 * crop_size)
+    crop_size : Union[Tuple[int, int], int]
+        If Tuple, the cropped parts will have this shape, else
+        the crop will be (2 * crop_size, 2 * crop_size)
     n_peaks : int
         Number of peaks
     dtype : numpy.dtype
@@ -370,8 +376,10 @@ def allocate_crop_bufs(crop_size, n_peaks, dtype, limit=2**19):
     crop_bufs: np.ndarray
         Shape (n, 2*crop_size, 2*crop_size)
     '''
+    if isinstance(crop_size, int):
+        crop_size = (2 * crop_size, 2 * crop_size)
     buf_count = get_buf_count(crop_size, n_peaks, dtype, limit)
-    crop_bufs = zeros((buf_count, 2 * crop_size, 2 * crop_size), dtype=dtype)
+    crop_bufs = zeros((buf_count, *crop_size), dtype=dtype)
     return crop_bufs
 
 
@@ -396,8 +404,8 @@ def process_frame_fast(template, crop_size, frame, peaks,
         The source pattern should have size (2 * crop_size, 2 * crop_size). Please note that
         the real Fourier transform (fft.rfft2) of the source pattern has a different shape!
     crop_size : int
-        Half the size of the correlation pattern. Given as a parameter since real Fourier
-        transform changes the size.
+        Unused. Formerly half the size of the correlation pattern.
+        This crop shape is read implicitly from the shape[1:] of crop_bufs.
     frame : np.ndarray
         Frame data. Currently, only Real values are supported.
     peaks : np.ndarray
@@ -411,7 +419,7 @@ def process_frame_fast(template, crop_size, frame, peaks,
     out_elevations : np.ndarray
         Output buffer for peak elevation in log scaled frame. Shape (n_peaks, ) and float dtype.
     crop_bufs : np.ndarray
-        Aligned buffer for pyfftw. Shape (n, 2 * crop_size, 2 * crop_size) and float dtype.
+        Aligned buffer for pyfftw. Shape (n, *crop_shape) and float dtype.
         n doesn't have to match the number of peaks. Instead, it should be chosen for good L3 cache
         efficiency. :meth:`allocate_crop_bufs` can be used to allocate this buffer.
     upsample : Union[bool, int], optional
@@ -452,7 +460,7 @@ def process_frame_fast(template, crop_size, frame, peaks,
     ...     )
     >>> assert np.allclose(refineds[0], peaks, atol=0.1)
     '''
-    buf_count = len(crop_bufs)
+    buf_count, *crop_shape = crop_bufs.shape
     block_count = (len(peaks) - 1) // buf_count + 1
     for block in range(block_count):
         start = block * buf_count
@@ -472,7 +480,7 @@ def process_frame_fast(template, crop_size, frame, peaks,
         if int(upsample) > 1:
             evaluate_upsampling(
                 corrspecs=corrspecs, corrs=crop_bufs[:size], peaks=peaks[start:stop],
-                crop_size=crop_size, sig_shape=frame.shape, upsample_factor=int(upsample),
+                crop_shape=crop_shape, sig_shape=frame.shape, upsample_factor=int(upsample),
                 out_centers=out_centers[start:stop], out_refineds=out_refineds[start:stop],
             )
 
@@ -497,9 +505,9 @@ def process_frame_full(template, crop_size, frame, peaks,
         Real Fourier transform of the correlation pattern.
         The source pattern should have size (2 * crop_size, 2 * crop_size). Please note that
         the real Fourier transform (fft.rfft2) of the source pattern has a different shape!
-    crop_size : int
-        Half the size of the correlation pattern. Given as a parameter since real Fourier
-        transform changes the size.
+    crop_size : Union[Tuple[int, int], int]
+        The sub-array shape to crop from the correlation pattern for each peak, or the
+        half-size of the crop, in which case (2 * crop_size, 2 * crop_size) is used.
     frame : np.ndarray
         Frame data. Currently, only real values are supported.
     peaks : np.ndarray
@@ -564,11 +572,14 @@ def process_frame_full(template, crop_size, frame, peaks,
     '''
     if upsample is True:
         upsample = 20
+    crop_shape = crop_size
+    if isinstance(crop_size, (int, float)):
+        crop_shape = (int(2 * crop_size), int(2 * crop_size))
     log_scale(frame, out=frame_buf)
     spec_part = fft.rfft2(frame_buf)
     corrspec = template * spec_part
     corr = fft.fftshift(fft.irfft2(corrspec))
-    crop_bufs = np.zeros((buf_count, 2 * crop_size, 2 * crop_size), dtype=corr.dtype)
+    crop_bufs = np.zeros((buf_count, *crop_shape), dtype=corr.dtype)
     block_count = (len(peaks) - 1) // buf_count + 1
     for block in range(block_count):
         start = block * buf_count
@@ -586,6 +597,6 @@ def process_frame_full(template, crop_size, frame, peaks,
         if int(upsample) > 1:
             evaluate_upsampling(
                 corrspecs=corrspec, corrs=crop_bufs[:size], peaks=peaks[start:stop],
-                crop_size=crop_size, sig_shape=frame.shape, upsample_factor=int(upsample),
+                crop_shape=crop_shape, sig_shape=frame.shape, upsample_factor=int(upsample),
                 out_centers=out_centers[start:stop], out_refineds=out_refineds[start:stop],
             )

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional, Tuple
 
 import numpy as np
 from skimage.feature import peak_local_max
@@ -71,7 +71,8 @@ def get_peaks(sum_result, match_pattern: MatchPattern, num_peaks):
 
 def process_frames_fast(
     pattern: MatchPattern, frames, peaks,
-    upsample: Union[bool, int] = False
+    upsample: Union[bool, int] = False,
+    crop_shape: Optional[Tuple[int, int]] = None,
 ):
     '''
     Find the parameters of peaks in a diffraction pattern by correlation with a match pattern.
@@ -97,6 +98,10 @@ def process_frames_fast(
         positive integer > 1 will upsample the correlation peak by this factor.
         DFT upsampling can provide more accurate center values, especially when
         peak shifts are small, but does require more computation time.
+    crop_shape : Tuple[int, int], optional
+        The shape to use when cropping peaks from the frame before correlation.
+        By default :code:`(2 * crop_size, 2 * crop_size)`, as provided by
+        the :code:`search` attribute of pattern.
 
     Returns
     -------
@@ -122,19 +127,21 @@ def process_frames_fast(
     >>> assert np.allclose(refineds[0], peaks, atol=0.1)
     '''
 
-    crop_size = pattern.get_crop_size()
-    template = pattern.get_template(sig_shape=(2 * crop_size, 2 * crop_size))
+    if crop_shape is None:
+        crop_size = pattern.get_crop_size()
+        crop_shape = (2 * crop_size, 2 * crop_size)
+    template = pattern.get_template(sig_shape=crop_shape)
 
     centers = np.zeros((len(frames), len(peaks), 2), dtype=np.int16)
     refineds = np.zeros((len(frames), len(peaks), 2), dtype=np.float32)
     heights = np.zeros((len(frames), len(peaks)), dtype=np.float32)
     elevations = np.zeros((len(frames), len(peaks)), dtype=np.float32)
 
-    crop_bufs = base.correlation.allocate_crop_bufs(crop_size, len(peaks), frames.dtype)
+    crop_bufs = base.correlation.allocate_crop_bufs(crop_shape, len(peaks), frames.dtype)
 
     for i, f in enumerate(frames):
         base.correlation.process_frame_fast(
-            template=template, crop_size=crop_size,
+            template=template, crop_size=crop_shape,
             frame=f, peaks=peaks.astype(np.int32),
             out_centers=centers[i], out_refineds=refineds[i],
             out_heights=heights[i], out_elevations=elevations[i],
@@ -145,7 +152,8 @@ def process_frames_fast(
 
 def process_frames_full(
     pattern: MatchPattern, frames, peaks,
-    upsample: Union[bool, int] = False
+    upsample: Union[bool, int] = False,
+    crop_shape: Optional[Tuple[int, int]] = None,
 ):
     '''
     Find the parameters of peaks in a diffraction pattern by correlation with a match pattern.
@@ -172,6 +180,10 @@ def process_frames_full(
         positive integer > 1 will upsample the correlation peak by this factor.
         DFT upsampling can provide more accurate center values, especially when
         peak shifts are small, but does require more computation time.
+    crop_shape : Tuple[int, int], optional
+        The shape to use when cropping peaks from the full frame correlation
+        pattern. By default :code:`(2 * crop_size, 2 * crop_size)`, as provided by
+        the :code:`search` attribute of pattern.
 
     Returns
     -------
@@ -196,7 +208,9 @@ def process_frames_full(
     ... )
     >>> assert np.allclose(refineds[0], peaks, atol=0.1)
     '''
-    crop_size = pattern.get_crop_size()
+    if crop_shape is None:
+        crop_size = pattern.get_crop_size()
+        crop_shape = (2 * crop_size, 2 * crop_size)
     template = pattern.get_template(sig_shape=frames[0].shape)
 
     centers = np.zeros((len(frames), len(peaks), 2), dtype=np.uint16)
@@ -206,11 +220,11 @@ def process_frames_full(
 
     frame_buf = base.correlation.zeros(frames[0].shape, dtype=np.float32)
 
-    buf_count = base.correlation.get_buf_count(crop_size, len(peaks), frame_buf.dtype)
+    buf_count = base.correlation.get_buf_count(crop_shape, len(peaks), frame_buf.dtype)
 
     for i, f in enumerate(frames):
         base.correlation.process_frame_full(
-            template=template, crop_size=crop_size,
+            template=template, crop_size=crop_shape,
             frame=f, peaks=peaks.astype(np.int32),
             out_centers=centers[i], out_refineds=refineds[i],
             out_heights=heights[i], out_elevations=elevations[i],

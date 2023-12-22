@@ -3,7 +3,7 @@ import functools
 import numpy as np
 from numpy.testing import assert_allclose
 import pytest
-from scipy.signal import correlate2d
+from scipy.signal import correlate
 
 import libertem.masks as m
 from libertem.utils.generate import cbed_frame
@@ -208,26 +208,37 @@ def test_standalone_full():
 
 
 @pytest.mark.parametrize(
-        'where', ((0, 0), (2, 3)),
+        'frame_pos', ((0, 0), (2, 3)),
 )
 @pytest.mark.parametrize(
         'peak', ((1, 1), (3, 2)),
 )
-def test_scipy_correlate2d(where, peak):
-    frame = np.zeros((5, 6))
-    frame[where] = 1
-    pattern = frame.copy()
-    correlated = correlate2d(frame, pattern, mode='same')
-    ref_center = np.unravel_index(
+@pytest.mark.parametrize(
+        'shape', ((11, 12), (16, 16), (16, 15)),
+)
+def test_scipy_correlate(frame_pos, peak, shape):
+
+    frame = np.zeros(shape).astype(np.float32)
+    frame[frame_pos] = 1
+    pattern = np.zeros(shape).astype(np.float32)
+    pattern[peak] = 1
+    correlated = correlate(frame, pattern, mode='same')
+    ref_center = np.asarray(np.unravel_index(
         np.argmax(correlated),
         frame.shape
-    )
-    centers, refineds, heights, elevations = process_frames_fast(
-        pattern=UserTemplate(pattern),
+    ))
+    ref_center -= np.asarray(frame.shape) // 2
+    ref_center += peak
+    assert_allclose(ref_center, frame_pos)
+
+    pattern = np.zeros((3, 3), dtype=np.float32)
+    pattern[1, 1] = 1
+    pattern = UserTemplate(pattern)
+    centers, _, _, _ = process_frames_fast(
+        pattern=pattern,
         frames=np.array([frame]),
         peaks=np.array([peak]),
-        upsample=False
+        upsample=False,
+        crop_shape=(7, 7),
     )
-    print(frame)
-    print(ref_center, centers[0, 0])
     assert_allclose(ref_center, centers[0, 0])
