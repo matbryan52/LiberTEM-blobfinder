@@ -101,7 +101,7 @@ def process_frames_fast(
     crop_shape : Tuple[int, int], optional
         The shape to use when cropping peaks from the frame before correlation.
         By default :code:`(2 * crop_size, 2 * crop_size)`, as provided by
-        the :code:`search` attribute of pattern.
+        the :code:`get_crop_size()` method of pattern.
 
     Returns
     -------
@@ -184,7 +184,7 @@ def process_frames_full(
     crop_shape : Tuple[int, int], optional
         The shape to use when cropping peaks from the full frame correlation
         pattern. By default :code:`(2 * crop_size, 2 * crop_size)`, as provided by
-        the :code:`search` attribute of pattern.
+        the :code:`get_crop_size()` method of pattern.
 
     Returns
     -------
